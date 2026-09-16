@@ -1,0 +1,60 @@
+﻿name: 24/7 Continuous Naukri Profile Refresh (Account 2)
+
+on:
+  schedule:
+    # Heartbeat watchdog every 4 hours to guarantee continuous loop
+    - cron: '0 */4 * * *'
+  push:
+    branches: [ main ]
+  workflow_dispatch: # Allows manual trigger from GitHub web UI
+
+concurrency:
+  group: naukri-refresh-account2
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    name: 24/7 Naukri Profile Refresher (Account 2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    permissions:
+      actions: write
+      contents: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          npm install
+          npx --yes playwright-core install --with-deps chromium
+
+      - name: Run Profile Refresh (48 Cycles / Every 5 Min = 4 Hours)
+        env:
+          NAUKRI_SESSION_B64: ${{ secrets.NAUKRI_SESSION_B64 }}
+          SKIP_CV_UPLOAD: "true"
+          CI: true
+          REFRESH_CYCLES: 48
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x900x24" node naukri-profile-refresh.js
+
+      - name: Auto-Trigger Next Continuous Run
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run naukri-refresh.yml --repo ${{ github.repository }} || true
+
+      - name: Upload Screenshot on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-screenshot
+          path: "*.png"
