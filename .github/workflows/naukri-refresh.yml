@@ -1,4 +1,4 @@
-﻿name: 24/7 Continuous Naukri Profile Refresh (Account 2)
+name: 24/7 Continuous Naukri Profile Refresh (Account 2)
 
 on:
   schedule:
@@ -36,12 +36,13 @@ jobs:
           npm install
           npx --yes playwright-core install --with-deps chromium
 
-      - name: Run Profile Refresh (48 Cycles / Every 5 Min = 4 Hours)
+      - name: Run Profile Refresh (16 Cycles / Every 15 Min = 4 Hours)
         env:
           NAUKRI_SESSION_B64: ${{ secrets.NAUKRI_SESSION_B64 }}
           SKIP_CV_UPLOAD: "true"
           CI: true
-          REFRESH_CYCLES: 48
+          REFRESH_CYCLES: 16
+          REFRESH_INTERVAL_MINUTES: 15
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1280x900x24" node naukri-profile-refresh.js
 

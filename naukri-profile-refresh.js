@@ -291,7 +291,8 @@ async function googleLogin(ctx, page) {
   try {
     const defaultCycles = isCI ? 50 : 1;
     const CYCLES = parseInt(process.env.REFRESH_CYCLES || (process.argv.includes("--loop") ? "50" : defaultCycles), 10);
-    const DELAY_MS = 5 * 60 * 1000; // 5 minutes between updates
+    const DELAY_MINS = parseInt(process.env.REFRESH_INTERVAL_MINUTES || "15", 10);
+    const DELAY_MS = DELAY_MINS * 60 * 1000; // minutes between updates
 
     let consecutiveErrors = 0;
 
@@ -420,7 +421,7 @@ async function googleLogin(ctx, page) {
       }
 
       if (cycle < CYCLES) {
-        log(`Waiting 5 minutes before next refresh cycle...`);
+        log(`Waiting ${DELAY_MINS} minutes before next refresh cycle...`);
         await page.waitForTimeout(DELAY_MS);
       }
     }
