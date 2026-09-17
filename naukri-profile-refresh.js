@@ -53,6 +53,57 @@ const log = (msg) => {
   fs.appendFileSync(LOG_FILE, line + "\n");
 };
 
+async function dismissPopups(page) {
+  try {
+    await page.keyboard.press("Escape").catch(() => {});
+    await page.waitForTimeout(500);
+
+    const selectors = [
+      '.crossIcon',
+      '[class*="closeIcon"]',
+      '[class*="close-icon"]',
+      '[class*="close_icon"]',
+      '[class*="cross-icon"]',
+      '[class*="drawer-close"]',
+      '[aria-label*="close" i]',
+      '[aria-label*="dismiss" i]',
+      'button:has-text("Later")',
+      'button:has-text("Maybe later")',
+      'button:has-text("Skip")',
+      'button:has-text("Not now")',
+      '[class*="feedback"] [class*="close"]',
+      '[class*="nps"] [class*="close"]',
+      '[class*="modal"] [class*="close"]',
+      '[class*="popup"] [class*="close"]',
+      '.nps-widget-close',
+      '.lightbox-close',
+      'div[class*="close"]',
+      'span[class*="close"]',
+      'svg[class*="close"]'
+    ];
+
+    for (const sel of selectors) {
+      const loc = page.locator(sel);
+      const count = await loc.count().catch(() => 0);
+      for (let i = 0; i < count; i++) {
+        const el = loc.nth(i);
+        if (await el.isVisible().catch(() => false)) {
+          await el.click({ timeout: 1000, force: true }).catch(() => {});
+        }
+      }
+    }
+
+    await page.evaluate(() => {
+      const overlays = document.querySelectorAll('.overlay, .backdrop, [class*="modal-backdrop"], .survey-container, [class*="nps"]');
+      overlays.forEach(el => {
+        if (el && !el.closest('#resumeHeadlineTxt') && !el.closest('form')) {
+          el.remove();
+        }
+      });
+    }).catch(() => {});
+  } catch (e) {}
+}
+
 const onProfile = (url) => url.pathname && url.pathname.startsWith("/mnjuser");
 
 async function gotoWithRetry(page, url, retries = 3) {
@@ -304,8 +355,8 @@ async function googleLogin(ctx, page) {
         await page.waitForTimeout(3000);
         log(`Current URL: ${page.url()} | Title: ${await page.title()}`);
 
-        // Dismiss any promotional drawer / popup
-        await page.locator('.crossIcon, button:has-text("Later"), [class*="close-icon"], .drawer-close').first().click({ timeout: 2000 }).catch(() => {});
+        // Dismiss any promotional drawer / popup / feedback modal
+        await dismissPopups(page);
 
         if (!onProfile(new URL(page.url()))) {
           log(`Redirected to ${page.url()} — attempting login...`);
@@ -315,15 +366,17 @@ async function googleLogin(ctx, page) {
         // login may land on /mnjuser/homepage — make sure we're on the profile itself
         if (!/\/mnjuser\/profile/.test(page.url())) {
           await gotoWithRetry(page, PROFILE_URL);
-          await page.locator('.crossIcon, button:has-text("Later"), [class*="close-icon"], .drawer-close').first().click({ timeout: 2000 }).catch(() => {});
+          await dismissPopups(page);
         }
 
         // Resume headline widget → pencil icon → textarea → save
         const editIcon = page.locator(
-          '#lazyResumeHead span.edit.icon, [data-ga-track*="resumeHeadline"] .edit, .widgetHead .edit, .widgetHead a.edit, a:has-text("Edit headline"), [class*="resumeHead"] [class*="edit"]',
+          '#lazyResumeHead span.edit.icon, [data-ga-track*="resumeHeadline"] .edit, .widgetHead .edit, .widgetHead a.edit, a:has-text("Edit headline"), [class*="resumeHead"] [class*="edit"], span.edit.icon'
         );
+        await dismissPopups(page);
+        await editIcon.first().scrollIntoViewIfNeeded().catch(() => {});
         await editIcon.first().waitFor({ timeout: 30000 });
-        await editIcon.first().click();
+        await editIcon.first().click({ force: true });
 
         const textarea = page.locator("#resumeHeadlineTxt");
         await textarea.waitFor({ timeout: 15000 });
@@ -335,15 +388,19 @@ async function googleLogin(ctx, page) {
         await page
           .getByRole("button", { name: /^save$/i })
           .first()
-          .click();
+          .click({ force: true });
         await textarea.waitFor({ state: "hidden", timeout: 15000 });
 
-        // modal closing isn't proof the save stuck — reload from the server and re-read
+        // modal closing verification
         await gotoWithRetry(page, PROFILE_URL);
+        await dismissPopups(page);
+        await editIcon.first().scrollIntoViewIfNeeded().catch(() => {});
         await editIcon.first().waitFor({ timeout: 30000 });
-        await editIcon.first().click();
+        await editIcon.first().click({ force: true });
         await textarea.waitFor({ timeout: 15000 });
         const saved = (await textarea.inputValue()).trimEnd();
+        // Close the modal again
+        await page.keyboard.press("Escape").catch(() => {});
         if (saved !== updated) {
           throw new Error(
             `save did not stick — server headline is "${saved.slice(0, 60)}", expected "${updated.slice(0, 60)}"`,
