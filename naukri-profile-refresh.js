@@ -392,42 +392,23 @@ async function googleLogin(ctx, page) {
         });
         log(`DIAG: ${JSON.stringify(diag)}`);
 
-        // Click edit icon for Resume headline
-        const clickResult = await page.evaluate(() => {
-          const btn = document.querySelector('[aria-label*="Edit resume headline"], #lazyResumeHead .edit, #lazyResumeHead span.edit');
-          if (btn) {
-            btn.scrollIntoView({ behavior: 'instant', block: 'center' });
-            btn.click();
-            btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-            return true;
-          }
-          // Alternative search by text
-          const headers = Array.from(document.querySelectorAll('div, section, span, h2, h3, h4')).filter(el => {
-            const t = el.innerText || el.textContent || '';
-            return t.startsWith('Resume headline');
-          });
-          for (const h of headers) {
-            const container = h.closest('.widgetHead, .card, div') || h.parentElement;
-            if (!container) continue;
-            const editBtn = container.querySelector('span.edit, [class*="edit"], .icon.edit, .edit.icon');
-            if (editBtn) {
-              editBtn.scrollIntoView({ behavior: 'instant', block: 'center' });
-              editBtn.click();
-              editBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-              return true;
-            }
-          }
-          return false;
-        });
+        // Click edit icon for Resume headline directly with Playwright pointer
+        const editIcon = page.locator('[aria-label="Edit resume headline"], [aria-label*="Edit resume headline"], #lazyResumeHead span.edit').first();
+        await editIcon.scrollIntoViewIfNeeded().catch(() => {});
+        await editIcon.click();
+        await page.waitForTimeout(2000);
 
-        // Fallback to playwright locator if needed
-        if (!clickResult) {
-          const editIcon = page.locator(
-            '[aria-label*="Edit resume headline"], #lazyResumeHead span.edit, #lazyResumeHead .edit, [data-ga-track*="resumeHeadline"] .edit, div:has-text("Resume headline") span.edit'
-          ).first();
-          await editIcon.scrollIntoViewIfNeeded().catch(() => {});
-          await editIcon.click({ force: true });
-        }
+        // Debug DOM after click
+        const postClick = await page.evaluate(() => {
+          const textareas = Array.from(document.querySelectorAll('textarea, input[type="text"]')).map(el => ({
+            id: el.id,
+            name: el.name,
+            cls: el.className,
+            visible: el.offsetParent !== null
+          }));
+          return { textareas };
+        });
+        log(`POST_CLICK_DOM: ${JSON.stringify(postClick)}`);
 
         const textarea = page.locator("#resumeHeadlineTxt");
         await textarea.waitFor({ timeout: 15000 });
