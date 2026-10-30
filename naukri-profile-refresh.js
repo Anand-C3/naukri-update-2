@@ -381,6 +381,17 @@ async function googleLogin(ctx, page) {
         // Navigate and scroll directly to Resume Headline
         await dismissPopups(page);
 
+        const diag = await page.evaluate(() => {
+          const editIcons = Array.from(document.querySelectorAll('.edit, [class*="edit"], [aria-label*="edit" i]')).map(el => ({
+            tag: el.tagName,
+            cls: el.className,
+            aria: el.getAttribute('aria-label'),
+            parentText: (el.parentElement?.innerText || '').slice(0, 40).replace(/\n/g, ' ')
+          }));
+          return { editIcons };
+        });
+        log(`DIAG: ${JSON.stringify(diag)}`);
+
         // Click edit icon for Resume headline
         const clickResult = await page.evaluate(() => {
           const btn = document.querySelector('[aria-label*="Edit resume headline"], #lazyResumeHead .edit, #lazyResumeHead span.edit');
