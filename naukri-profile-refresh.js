@@ -374,7 +374,7 @@ async function googleLogin(ctx, page) {
 
         // Click edit icon for Resume headline
         const clickResult = await page.evaluate(() => {
-          const btn = document.querySelector('[aria-label*="Edit resume headline"], #lazyResumeHead .edit, .widgetHead:has-text("Resume headline") .edit, span.edit.icon');
+          const btn = document.querySelector('[aria-label*="Edit resume headline"], #lazyResumeHead .edit, #lazyResumeHead span.edit');
           if (btn) {
             btn.scrollIntoView({ behavior: 'instant', block: 'center' });
             btn.click();
