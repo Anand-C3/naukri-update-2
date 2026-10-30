@@ -384,7 +384,7 @@ async function googleLogin(ctx, page) {
             // Find edit icon within or adjacent
             const container = h.closest('.widgetHead, .card, div') || h.parentElement;
             if (!container) continue;
-            const btn = container.querySelector('span.edit, [class*="edit"], a:has-text("Edit"), em.edit, svg.edit');
+            const btn = container.querySelector('span.edit, [class*="edit"], em.edit, svg.edit, .icon.edit, .edit.icon');
             if (btn && btn.offsetParent !== null) { // visible
               btn.scrollIntoView({ behavior: 'instant', block: 'center' });
               btn.click();
