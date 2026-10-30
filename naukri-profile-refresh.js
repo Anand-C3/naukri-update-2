@@ -370,24 +370,40 @@ async function googleLogin(ctx, page) {
         }
 
         // Navigate and scroll directly to Resume Headline
-        const resumeHeadNav = page.locator('a:has-text("Resume headline"), [href*="lazyResumeHead"], li:has-text("Resume headline")').first();
-        if (await resumeHeadNav.isVisible({ timeout: 3000 }).catch(() => false)) {
-          await resumeHeadNav.click().catch(() => {});
-          await page.waitForTimeout(1000);
-        }
-
-        const headlineWidget = page.locator('#lazyResumeHead, [data-ga-track*="resumeHeadline"], div.widgetHead:has-text("Resume headline")').first();
-        await headlineWidget.scrollIntoViewIfNeeded().catch(() => {});
-        await page.waitForTimeout(500);
-
-        // Resume headline widget → pencil icon (scoped strictly to resume headline)
-        const editIcon = page.locator(
-          '#lazyResumeHead span.edit.icon, #lazyResumeHead .edit, [data-ga-track*="resumeHeadline"] .edit, .widgetHead:has-text("Resume headline") .edit, a:has-text("Edit headline"), [class*="resumeHead"] [class*="edit"]'
-        );
         await dismissPopups(page);
-        await editIcon.first().scrollIntoViewIfNeeded().catch(() => {});
-        await editIcon.first().waitFor({ timeout: 30000 });
-        await editIcon.first().click({ force: true });
+
+        // Intelligently find and click the edit icon for Resume headline
+        const clickResult = await page.evaluate(() => {
+          // Find all elements containing text "Resume headline"
+          const headers = Array.from(document.querySelectorAll('div, section, span, h2, h3, h4')).filter(el => {
+            const directText = Array.from(el.childNodes).filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join(' ').trim();
+            return directText.includes('Resume headline') || el.innerText?.startsWith('Resume headline');
+          });
+
+          for (const h of headers) {
+            // Find edit icon within or adjacent
+            const container = h.closest('.widgetHead, .card, div') || h.parentElement;
+            if (!container) continue;
+            const btn = container.querySelector('span.edit, [class*="edit"], a:has-text("Edit"), em.edit, svg.edit');
+            if (btn && btn.offsetParent !== null) { // visible
+              btn.scrollIntoView({ behavior: 'instant', block: 'center' });
+              btn.click();
+              btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              return { success: true, tag: btn.tagName, class: btn.className, html: btn.outerHTML.slice(0, 100) };
+            }
+          }
+          return { success: false, reason: 'No edit button found in headers' };
+        });
+        log(`Resume headline click result: ${JSON.stringify(clickResult)}`);
+
+        // Fallback to playwright locator if evaluate didn't find it
+        if (!clickResult || !clickResult.success) {
+          const editIcon = page.locator(
+            '#lazyResumeHead span.edit, [data-ga-track*="resumeHeadline"] .edit, div:has-text("Resume headline") span.edit, span.edit'
+          ).first();
+          await editIcon.scrollIntoViewIfNeeded().catch(() => {});
+          await editIcon.click({ force: true });
+        }
 
         const textarea = page.locator("#resumeHeadlineTxt");
         await textarea.waitFor({ timeout: 15000 });
