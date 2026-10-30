@@ -369,9 +369,20 @@ async function googleLogin(ctx, page) {
           await dismissPopups(page);
         }
 
-        // Resume headline widget → pencil icon → textarea → save
+        // Navigate and scroll directly to Resume Headline
+        const resumeHeadNav = page.locator('a:has-text("Resume headline"), [href*="lazyResumeHead"], li:has-text("Resume headline")').first();
+        if (await resumeHeadNav.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await resumeHeadNav.click().catch(() => {});
+          await page.waitForTimeout(1000);
+        }
+
+        const headlineWidget = page.locator('#lazyResumeHead, [data-ga-track*="resumeHeadline"], div.widgetHead:has-text("Resume headline")').first();
+        await headlineWidget.scrollIntoViewIfNeeded().catch(() => {});
+        await page.waitForTimeout(500);
+
+        // Resume headline widget → pencil icon (scoped strictly to resume headline)
         const editIcon = page.locator(
-          '#lazyResumeHead span.edit.icon, [data-ga-track*="resumeHeadline"] .edit, .widgetHead .edit, .widgetHead a.edit, a:has-text("Edit headline"), [class*="resumeHead"] [class*="edit"], span.edit.icon'
+          '#lazyResumeHead span.edit.icon, #lazyResumeHead .edit, [data-ga-track*="resumeHeadline"] .edit, .widgetHead:has-text("Resume headline") .edit, a:has-text("Edit headline"), [class*="resumeHead"] [class*="edit"]'
         );
         await dismissPopups(page);
         await editIcon.first().scrollIntoViewIfNeeded().catch(() => {});
@@ -470,8 +481,8 @@ async function googleLogin(ctx, page) {
             .screenshot({ path: ERROR_SHOT.replace(".png", `-${cycle}-${i}.png`) })
             .catch(() => {});
         }
-        if (consecutiveErrors >= 5) {
-          log("ERROR: 5 consecutive failures occurred, ending run.");
+        if (consecutiveErrors >= 5 || (CYCLES === 1 && consecutiveErrors > 0)) {
+          log("ERROR: Cycle failure occurred, ending run.");
           process.exitCode = 1;
           break;
         }
