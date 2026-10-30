@@ -58,7 +58,9 @@ async function dismissPopups(page) {
     await page.keyboard.press("Escape").catch(() => {});
     await page.waitForTimeout(500);
 
-    const selectors = [
+    const closeTriggers = [
+      'div:has-text("Power up your profile") [class*="close"]',
+      'div:has-text("Power up your profile") svg',
       '.crossIcon',
       '[class*="closeIcon"]',
       '[class*="close-icon"]',
@@ -70,19 +72,10 @@ async function dismissPopups(page) {
       'button:has-text("Later")',
       'button:has-text("Maybe later")',
       'button:has-text("Skip")',
-      'button:has-text("Not now")',
-      '[class*="feedback"] [class*="close"]',
-      '[class*="nps"] [class*="close"]',
-      '[class*="modal"] [class*="close"]',
-      '[class*="popup"] [class*="close"]',
-      '.nps-widget-close',
-      '.lightbox-close',
-      'div[class*="close"]',
-      'span[class*="close"]',
-      'svg[class*="close"]'
+      'button:has-text("Not now")'
     ];
 
-    for (const sel of selectors) {
+    for (const sel of closeTriggers) {
       const loc = page.locator(sel);
       const count = await loc.count().catch(() => 0);
       for (let i = 0; i < count; i++) {
@@ -94,10 +87,26 @@ async function dismissPopups(page) {
     }
 
     await page.evaluate(() => {
-      const overlays = document.querySelectorAll('.overlay, .backdrop, [class*="modal-backdrop"], .survey-container, [class*="nps"]');
+      // Remove overlays and backdrops
+      const overlays = document.querySelectorAll('.overlay, .backdrop, [class*="modal-backdrop"], .survey-container, [class*="nps"], [class*="overlay"]');
       overlays.forEach(el => {
         if (el && !el.closest('#resumeHeadlineTxt') && !el.closest('form')) {
           el.remove();
+        }
+      });
+
+      // Remove promotional / Pro popups completely
+      const allDivs = Array.from(document.querySelectorAll('div, section, aside'));
+      allDivs.forEach(el => {
+        const t = el.innerText || '';
+        if (t.includes('Power up your profile') || t.includes('recommend our Power Profile') || t.includes('Power Profile service')) {
+          let topModal = el;
+          while (topModal.parentElement && topModal.parentElement !== document.body && topModal.parentElement.tagName !== 'BODY') {
+            topModal = topModal.parentElement;
+          }
+          if (topModal && !topModal.querySelector('#resumeHeadlineTxt')) {
+            topModal.remove();
+          }
         }
       });
     }).catch(() => {});
