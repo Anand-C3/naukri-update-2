@@ -2,15 +2,15 @@ name: Scheduled Naukri Profile Refresh (Account 2)
 
 on:
   schedule:
-    # 8:15 AM, 9:00 AM, 10:00 AM, 11:00 AM, 1:00 PM, 2:00 PM, 3:00 PM, 4:30 PM IST (UTC+5:30) - Monday to Friday only
-    - cron: '45 2 * * 1-5'  # 08:15 AM IST (after 8:00 AM), Mon-Fri
-    - cron: '30 3 * * 1-5'  # 09:00 AM IST, Mon-Fri
-    - cron: '30 4 * * 1-5'  # 10:00 AM IST, Mon-Fri
-    - cron: '30 5 * * 1-5'  # 11:00 AM IST, Mon-Fri
-    - cron: '30 7 * * 1-5'  # 01:00 PM IST, Mon-Fri
-    - cron: '30 8 * * 1-5'  # 02:00 PM IST, Mon-Fri
-    - cron: '30 9 * * 1-5'  # 03:00 PM IST, Mon-Fri
-    - cron: '0 11 * * 1-5'  # 04:30 PM IST, Mon-Fri
+    # 8:45 AM, 9:30 AM, 10:30 AM, 11:30 AM, 1:30 PM, 2:30 PM, 3:30 PM, 5:00 PM IST (UTC+5:30) - Monday to Friday only (30-min offset from Account 1)
+    - cron: '15 3 * * 1-5'  # 08:45 AM IST, Mon-Fri
+    - cron: '0 4 * * 1-5'   # 09:30 AM IST, Mon-Fri
+    - cron: '0 5 * * 1-5'   # 10:30 AM IST, Mon-Fri
+    - cron: '0 6 * * 1-5'   # 11:30 AM IST, Mon-Fri
+    - cron: '0 8 * * 1-5'   # 01:30 PM IST, Mon-Fri
+    - cron: '0 9 * * 1-5'   # 02:30 PM IST, Mon-Fri
+    - cron: '0 10 * * 1-5'  # 03:30 PM IST, Mon-Fri
+    - cron: '30 11 * * 1-5' # 05:00 PM IST, Mon-Fri
   workflow_dispatch: # Allows manual trigger from GitHub web UI
 
 concurrency:
