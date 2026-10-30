@@ -381,34 +381,11 @@ async function googleLogin(ctx, page) {
         // Navigate and scroll directly to Resume Headline
         await dismissPopups(page);
 
-        const diag = await page.evaluate(() => {
-          const editIcons = Array.from(document.querySelectorAll('.edit, [class*="edit"], [aria-label*="edit" i]')).map(el => ({
-            tag: el.tagName,
-            cls: el.className,
-            aria: el.getAttribute('aria-label'),
-            parentText: (el.parentElement?.innerText || '').slice(0, 40).replace(/\n/g, ' ')
-          }));
-          return { editIcons };
-        });
-        log(`DIAG: ${JSON.stringify(diag)}`);
-
         // Click edit icon for Resume headline directly with Playwright pointer
-        const editIcon = page.locator('[aria-label="Edit resume headline"], [aria-label*="Edit resume headline"], #lazyResumeHead span.edit').first();
+        const editIcon = page.locator('[aria-label="Edit resume headline"], [aria-label*="Edit resume headline"], #lazyResumeHead span.edit, .widgetHead:has-text("Resume headline") .edit').first();
         await editIcon.scrollIntoViewIfNeeded().catch(() => {});
         await editIcon.click();
-        await page.waitForTimeout(2000);
-
-        // Debug DOM after click
-        const postClick = await page.evaluate(() => {
-          const textareas = Array.from(document.querySelectorAll('textarea, input[type="text"]')).map(el => ({
-            id: el.id,
-            name: el.name,
-            cls: el.className,
-            visible: el.offsetParent !== null
-          }));
-          return { textareas };
-        });
-        log(`POST_CLICK_DOM: ${JSON.stringify(postClick)}`);
+        await page.waitForTimeout(1000);
 
         const textarea = page.locator("#resumeHeadlineTxt");
         await textarea.waitFor({ timeout: 15000 });
