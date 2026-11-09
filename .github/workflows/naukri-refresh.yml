@@ -2,8 +2,8 @@ name: Scheduled Naukri Profile Refresh (Account 2)
 
 on:
   schedule:
-    # Morning wake-up watchdog (triggers between 8:00 AM and 9:00 AM IST)
-    - cron: '07 3 * * 1-5'  # 08:37 AM IST, Mon-Fri (awkward non-congested minute)
+    # Morning wake-up watchdog (triggers between 8:00 AM and 8:30 AM IST)
+    - cron: '37 2 * * 1-5'  # 08:07 AM IST, Mon-Fri (awkward non-congested minute for 08:50 AM start)
   workflow_dispatch: # Allows manual trigger from GitHub web UI / chaining
     inputs:
       mode:
@@ -46,7 +46,7 @@ jobs:
           CI: true
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          SCHEDULE_SLOTS: "09:15,10:45,12:15,13:45,15:15,16:45,18:15"
+          SCHEDULE_SLOTS: "08:50,09:35,10:20,11:05,11:50,12:35,13:20,14:05,14:50,15:35,16:20,17:05,17:50,18:35"
           SINGLE_RUN: ${{ inputs.mode == 'single' }}
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1280x900x24" node run-cloud-schedule.js
