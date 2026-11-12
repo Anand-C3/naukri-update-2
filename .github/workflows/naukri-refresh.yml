@@ -2,8 +2,8 @@ name: Scheduled Naukri Profile Refresh (Account 2)
 
 on:
   schedule:
-    # Morning wake-up watchdog (triggers between 8:00 AM and 8:30 AM IST)
-    - cron: '37 2 * * 1-5'  # 08:07 AM IST, Mon-Fri (awkward non-congested minute for 08:50 AM start)
+    # Fallback watchdog (if 24/7 cloud relay is active, it exits in 2s; if dead, it revives)
+    - cron: '35 3,5,7,9,11 * * 1-5'
   workflow_dispatch: # Allows manual trigger from GitHub web UI / chaining
     inputs:
       mode:
@@ -13,7 +13,7 @@ on:
 
 concurrency:
   group: naukri-refresh-account2
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   refresh:

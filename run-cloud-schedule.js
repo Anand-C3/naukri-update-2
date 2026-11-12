@@ -2,7 +2,8 @@
  * run-cloud-schedule.js
  * Automated Cloud Session Runner for GitHub Actions (Account 2)
  * Runs alternating 45-minute profile updates during Indian business hours (Mon-Fri).
- * Maintains an unbroken 24/7 self-dispatch relay (zero cron delay, zero laptop dependence).
+ * Maintains an unbroken 24/7 self-dispatch relay with strict < 3h job lifespans
+ * to prevent GitHub Actions timeouts (zero cron delay, zero laptop dependence).
  */
 
 const { spawnSync } = require("child_process");
@@ -12,8 +13,8 @@ const SLOTS = (process.env.SCHEDULE_SLOTS || "08:50,09:35,10:20,11:05,11:50,12:3
   .map(s => s.trim())
   .filter(Boolean);
 
-const MAX_CYCLES_PER_JOB = 5; // Max 5 daytime cycles per job (~3.75 hours, safely below 6h limit)
-const MAX_RELAY_SLEEP_MS = 4 * 60 * 60 * 1000; // 4 hours max sleep in overnight relay before handoff
+const MAX_CYCLES_PER_JOB = 4; // Max 4 daytime cycles (~3 hours runtime, well below 350-min timeout)
+const MAX_RELAY_SLEEP_MS = 2.5 * 60 * 60 * 1000; // 2.5 hours max sleep in overnight relay before handoff
 
 function log(msg) {
   const istTime = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
@@ -79,6 +80,32 @@ function dispatchNextSession() {
   }
 }
 
+function checkOtherActiveRuns() {
+  const repo = process.env.GITHUB_REPOSITORY;
+  const currentRunId = process.env.GITHUB_RUN_ID;
+  if (!repo || !currentRunId) return false;
+  try {
+    const res = spawnSync("gh", [
+      "run", "list",
+      "--repo", repo,
+      "--workflow", "naukri-refresh.yml",
+      "--status", "in_progress",
+      "--json", "databaseId"
+    ], { env: process.env, encoding: "utf8" });
+    if (res.status === 0 && res.stdout) {
+      const runs = JSON.parse(res.stdout);
+      const otherRuns = runs.filter(r => String(r.databaseId) !== String(currentRunId));
+      if (otherRuns.length > 0) {
+        log(`Another run (#${otherRuns[0].databaseId}) is already in progress. Exiting this duplicate instance cleanly.`);
+        return true;
+      }
+    }
+  } catch (e) {
+    // If check fails, ignore and proceed
+  }
+  return false;
+}
+
 function getNextBusinessSlotTarget(slots) {
   const istNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   const [firstH, firstM] = slots[0].split(":").map(Number);
@@ -117,88 +144,95 @@ async function relayUntilNextBusinessSlot(slots) {
   const diffMs = target.getTime() - istNow.getTime();
 
   if (diffMs <= 0) {
-    log("Next business slot is now or has arrived. Proceeding to daytime loop...");
-    return;
+    log("Target slot time reached. Dispatching fresh daytime runner session...");
+    dispatchNextSession();
+    process.exit(0);
   }
 
   const diffHours = (diffMs / (1000 * 60 * 60)).toFixed(2);
   log(`Next business slot target: ${target.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })} IST (in ${diffHours} hours).`);
 
   if (diffMs > MAX_RELAY_SLEEP_MS) {
-    log(`Sleeping for 4 hours in cloud relay mode, then handing off to next runner...`);
+    log(`Sleeping for 2.5 hours in cloud relay mode, then handing off to next runner...`);
     await new Promise(res => setTimeout(res, MAX_RELAY_SLEEP_MS));
     dispatchNextSession();
     process.exit(0);
   } else {
     log(`Sleeping remaining ${(diffMs / (1000 * 60)).toFixed(1)} minutes until target slot at ${target.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })} IST...`);
     await new Promise(res => setTimeout(res, diffMs));
-    log("Wakeup target reached! Beginning scheduled business-day slots...");
+    log("Morning wakeup reached! Dispatching fresh daytime runner session...");
+    dispatchNextSession();
+    process.exit(0);
   }
 }
 
 async function main() {
-  // 1. Single run mode check
+  // Prevent duplicate runs from overlapping
+  if (checkOtherActiveRuns()) {
+    process.exit(0);
+  }
+
+  // Single run mode check
   if (process.env.SINGLE_RUN === "true" || process.argv.includes("--once")) {
     log("Single-run mode requested.");
     runSingleRefresh();
     process.exit(0);
   }
 
-  while (true) {
-    const now = getISTNow();
-    const isWeekend = now.dayOfWeek === 0 || now.dayOfWeek === 6;
-    const currentMinutes = now.hour * 60 + now.minute;
+  const now = getISTNow();
+  const isWeekend = now.dayOfWeek === 0 || now.dayOfWeek === 6;
+  const currentMinutes = now.hour * 60 + now.minute;
 
-    // Filter remaining slots for today
-    const remainingSlots = isWeekend ? [] : SLOTS.filter(slot => {
-      const slotMins = parseTimeToMinutes(slot);
-      return slotMins >= currentMinutes - 15;
-    });
+  // Filter remaining slots for today
+  const remainingSlots = isWeekend ? [] : SLOTS.filter(slot => {
+    const slotMins = parseTimeToMinutes(slot);
+    return slotMins >= currentMinutes - 15;
+  });
 
-    if (remainingSlots.length === 0) {
-      log(isWeekend 
-        ? "Weekend detected. Entering cloud relay to sleep until Monday business hours."
-        : "All scheduled slots for today have passed. Entering overnight cloud relay.");
-      await relayUntilNextBusinessSlot(SLOTS);
-      continue;
-    }
-
-    log(`Current time: ${String(now.hour).padStart(2, "0")}:${String(now.minute).padStart(2, "0")} (${currentMinutes} mins from midnight).`);
-    log(`Remaining slots today: ${remainingSlots.join(", ")}`);
-
-    let cyclesRun = 0;
-    for (let i = 0; i < remainingSlots.length; i++) {
-      const slot = remainingSlots[i];
-      const slotMins = parseTimeToMinutes(slot);
-      const nowCurrent = getISTNow();
-      const nowMins = nowCurrent.hour * 60 + nowCurrent.minute;
-      const diffMins = slotMins - nowMins;
-
-      if (diffMins > 0) {
-        log(`Next slot [${slot}] is in ${diffMins} minutes. Sleeping until ${slot} IST...`);
-        const delayMs = (diffMins * 60 - nowCurrent.second) * 1000;
-        if (delayMs > 0) {
-          await new Promise(res => setTimeout(res, delayMs));
-        }
-      }
-
-      log(`>>> Starting Slot [${slot}] update...`);
-      runSingleRefresh();
-      cyclesRun++;
-
-      // Check if this job should hand off to the next session during business hours
-      const hasMoreSlots = (i + 1) < remainingSlots.length;
-      if (cyclesRun >= MAX_CYCLES_PER_JOB && hasMoreSlots) {
-        log(`Reached max ${MAX_CYCLES_PER_JOB} daytime cycles for this runner session.`);
-        dispatchNextSession();
-        process.exit(0);
-      }
-    }
-
-    log("All scheduled updates for today have completed successfully!");
-    // Hand off to overnight relay
+  if (remainingSlots.length === 0) {
+    log(isWeekend 
+      ? "Weekend detected. Entering cloud relay to sleep until Monday business hours."
+      : "All scheduled slots for today have passed. Entering overnight cloud relay.");
     await relayUntilNextBusinessSlot(SLOTS);
+    return;
   }
+
+  log(`Current time: ${String(now.hour).padStart(2, "0")}:${String(now.minute).padStart(2, "0")} (${currentMinutes} mins from midnight).`);
+  log(`Remaining slots today: ${remainingSlots.join(", ")}`);
+
+  let cyclesRun = 0;
+  for (let i = 0; i < remainingSlots.length; i++) {
+    const slot = remainingSlots[i];
+    const slotMins = parseTimeToMinutes(slot);
+    const nowCurrent = getISTNow();
+    const nowMins = nowCurrent.hour * 60 + nowCurrent.minute;
+    const diffMins = slotMins - nowMins;
+
+    if (diffMins > 0) {
+      log(`Next slot [${slot}] is in ${diffMins} minutes. Sleeping until ${slot} IST...`);
+      const delayMs = (diffMins * 60 - nowCurrent.second) * 1000;
+      if (delayMs > 0) {
+        await new Promise(res => setTimeout(res, delayMs));
+      }
+    }
+
+    log(`>>> Starting Slot [${slot}] update...`);
+    runSingleRefresh();
+    cyclesRun++;
+
+    // Check if this job should hand off to the next session during business hours
+    const hasMoreSlots = (i + 1) < remainingSlots.length;
+    if (cyclesRun >= MAX_CYCLES_PER_JOB && hasMoreSlots) {
+      log(`Reached max ${MAX_CYCLES_PER_JOB} daytime cycles for this runner session. Handing off to fresh runner...`);
+      dispatchNextSession();
+      process.exit(0);
+    }
+  }
+
+  log("All scheduled updates for today have completed successfully!");
+  log("Handing off to fresh overnight relay runner...");
+  dispatchNextSession();
+  process.exit(0);
 }
 
 main().catch(err => {
