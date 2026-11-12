@@ -183,11 +183,24 @@ async function main() {
   const isWeekend = now.dayOfWeek === 0 || now.dayOfWeek === 6;
   const currentMinutes = now.hour * 60 + now.minute;
 
+  const firstSlotMins = parseTimeToMinutes(SLOTS[0]);
+  const lastSlotMins = parseTimeToMinutes(SLOTS[SLOTS.length - 1]);
+  const isPastLastSlot = currentMinutes > lastSlotMins;
+
   // Filter remaining slots for today
-  const remainingSlots = isWeekend ? [] : SLOTS.filter(slot => {
-    const slotMins = parseTimeToMinutes(slot);
-    return slotMins >= currentMinutes - 15;
-  });
+  // - On weekends or after the final slot of the day: 0 slots remaining (enter relay)
+  // - On weekday morning at startup: allow a 5-min grace window for boot-up delay
+  // - During the day: only slots scheduled in the future (or current minute)
+  let remainingSlots = [];
+  if (!isWeekend && !isPastLastSlot) {
+    remainingSlots = SLOTS.filter(slot => {
+      const slotMins = parseTimeToMinutes(slot);
+      if (slotMins === firstSlotMins && currentMinutes <= firstSlotMins + 5) {
+        return true;
+      }
+      return slotMins >= currentMinutes;
+    });
+  }
 
   if (remainingSlots.length === 0) {
     log(isWeekend 
