@@ -185,14 +185,13 @@ async function main() {
 
   const firstSlotMins = parseTimeToMinutes(SLOTS[0]);
   const lastSlotMins = parseTimeToMinutes(SLOTS[SLOTS.length - 1]);
-  const isPastLastSlot = currentMinutes > lastSlotMins;
+  const isBusinessHours = !isWeekend && currentMinutes >= (firstSlotMins - 5) && currentMinutes <= lastSlotMins;
 
   // Filter remaining slots for today
-  // - On weekends or after the final slot of the day: 0 slots remaining (enter relay)
-  // - On weekday morning at startup: allow a 5-min grace window for boot-up delay
-  // - During the day: only slots scheduled in the future (or current minute)
+  // ONLY active during business hours (08:50 to 18:35 IST, Mon-Fri).
+  // Any time before 08:45 AM, after 18:35 PM, or on weekends enters cloud relay.
   let remainingSlots = [];
-  if (!isWeekend && !isPastLastSlot) {
+  if (isBusinessHours) {
     remainingSlots = SLOTS.filter(slot => {
       const slotMins = parseTimeToMinutes(slot);
       if (slotMins === firstSlotMins && currentMinutes <= firstSlotMins + 5) {
@@ -205,7 +204,7 @@ async function main() {
   if (remainingSlots.length === 0) {
     log(isWeekend 
       ? "Weekend detected. Entering cloud relay to sleep until Monday business hours."
-      : "All scheduled slots for today have passed. Entering overnight cloud relay.");
+      : "Outside business hours. Entering cloud relay to sleep until next business slot.");
     await relayUntilNextBusinessSlot(SLOTS);
     return;
   }
